@@ -5,10 +5,10 @@ from contextlib import contextmanager
 def timer(msg):
 
     begin = time.strftime('%H:%M:%S', time.localtime())
-    print(f'[*] {begin} {msg} ...')
+    print(f'[*] {begin}  {msg} ...')
     yield
     end = time.strftime('%H:%M:%S', time.localtime())
-    print(f'[+] {end} {msg} done')
+    print(f'[+] {end}  {msg} done')
 
 
 @contextmanager

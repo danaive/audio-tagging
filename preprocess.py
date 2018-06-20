@@ -11,14 +11,15 @@ from utility import *
 
 SAMPLE_RATE = 44100
 PARALLEL_CORE = multiprocessing.cpu_count() - 1
+N_MFCC = 40
 
 
 def work(audios):
 
     for audio in audios:
         wav, _ = librosa.core.load(audio, sr=SAMPLE_RATE)
-        mfcc = librosa.feature.mfcc(wav, sr=SAMPLE_RATE, n_mfcc=40)
-        np.save(f'mfcc_{audio[:-4]}.npy', mfcc)
+        mfcc = librosa.feature.mfcc(wav, sr=SAMPLE_RATE, n_mfcc=N_MFCC)
+        np.save(f'mfcc{N_MFCC}_{audio[:-4]}.npy', mfcc)
 
 
 def grouping(path):
@@ -31,15 +32,24 @@ def grouping(path):
     return groups
 
 
+def find_shortest(path):
+
+    audios = glob(f'{path}/*.npy')
+    size = (50, 0)
+    for audio in audios:
+        mfcc = np.load(audio)
+        size = min(size, mfcc.shape)
+    print(size)
+
+
 if __name__ == '__main__':
 
     with ignore(OSError):
-        os.mkdir('mfcc_audio_train')
+        os.mkdir(f'mfcc{N_MFCC}_audio_train')
     with ignore(OSError):
-        os.mkdir('mfcc_audio_test')
+        os.mkdir(f'mfcc{N_MFCC}_audio_test')
 
-    with timer('grouping train data'):
-        train_groups = grouping('audio_train')
+    train_groups = grouping('audio_train')
     with timer('transforming train data'):
         train_pool = multiprocessing.Pool(processes=PARALLEL_CORE)
         for group in train_groups:
@@ -47,11 +57,12 @@ if __name__ == '__main__':
         train_pool.close()
         train_pool.join()
 
-    with timer('grouping test data'):
-        test_groups = grouping('audio_test')
+    test_groups = grouping('audio_test')
     with timer('transforming test data'):
         test_pool = multiprocessing.Pool(processes=PARALLEL_CORE)
         for group in test_groups:
             test_pool.apply_async(work, (test_groups[group],))
         test_pool.close()
         test_pool.join()
+    
+    # find_shortest('mfcc_audio_test')
