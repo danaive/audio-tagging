@@ -88,3 +88,4 @@ ENV/
 *.npy
 *.npz
 *.pyc
+*.pth
