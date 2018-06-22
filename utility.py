@@ -1,6 +1,7 @@
 import time
 from contextlib import contextmanager
 
+
 @contextmanager
 def timer(msg):
 
@@ -23,6 +24,8 @@ def ignore(*exceptions):
 if __name__ == '__main__':
 
     import os
+
     with ignore(OSError):
         os.mkdir('audio1-train')
         os.mkdir('audio2-train')
+        

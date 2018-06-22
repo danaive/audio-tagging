@@ -4,9 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.utils.data import DataLoader
 from torchvision import models
-from sklearn.model_selection import train_test_split, KFold
 
 from utility import *
 from data import *
@@ -19,9 +17,9 @@ device = torch.device('cuda' if use_cuda else 'cpu')
 
 class CNN(nn.Module):
 
-    def __init__(self, input_shape, n_mfcc=N_MFCC):
+    def __init__(self):
         super(CNN, self).__init__()
-        fc_indim = (input_shape // 16) * (n_mfcc // 16) * 32
+        fc_indim = (N_STEP // 16) * (N_MFCC // 16) * 32
         self.conv1 = nn.Conv2d(1, 32, kernel_size=(3, 9), padding=(1, 4))
         self.bn1 = nn.BatchNorm2d(32)
         self.conv2 = nn.Conv2d(32, 32, kernel_size=(3, 9), padding=(1, 4))
@@ -43,6 +41,15 @@ class CNN(nn.Module):
         return F.log_softmax(self.fc2(x), dim=1)
 
 
+def build_resnet50():
+
+    model = models.resnet50()
+    model.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+    model.avgpool = nn.AvgPool2d((2, 5), stride=1)
+    model.fc = nn.Linear(2048, len(CLASSES))
+    return model
+
+
 def mapk(output, target, k):
     
     def apk(pred, actual):
@@ -55,7 +62,7 @@ def mapk(output, target, k):
     return np.mean([apk(p, t) for p, t in zip(pred[:, :k], target)])
 
 
-def train(model, n_epoch=20, save_path=None):
+def train(model, train_loader, val_loader, n_epoch=20, save_path=None):
 
     model.to(device)
     criterion = nn.CrossEntropyLoss()
@@ -135,16 +142,6 @@ def predict(model, checkpoints, sub):
         labels.append(' '.join(map(lambda x: CLASSES[x], pred[:3])))
     sub['label'] = labels
     sub.to_csv('submission/last_prediction.csv', index=False)
-
-
-
-def build_resnet50():
-
-    model = models.resnet50()
-    model.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
-    model.avgpool = nn.AvgPool2d((2, 5), stride=1)
-    model.fc = nn.Linear(2048, len(CLASSES))
-    return model
     
 
 if __name__ == '__main__':
@@ -153,7 +150,13 @@ if __name__ == '__main__':
     train_samples = pd.read_csv('train.csv')['fname'].values
     # f_tr, f_val = train_test_split(train_samples, test_size=0.1)
 
-    save_paths = [f'resnet50_r{i:2d}' for i in range(10)]
+    import os
+    from torch.utils.data import DataLoader
+    from sklearn.model_selection import train_test_split, KFold
+
+    with ignore(OSError):
+        os.mkdir('checkpoints/naive')
+    save_paths = [f'naive/resnet50_r{i:2d}' for i in range(10)]
     round_id = 0
     for ix_tr, ix_val in KFold(n_splits=10).split(train_samples):
         f_tr, f_val = train_samples[ix_tr], train_samples[ix_val]
@@ -161,7 +164,7 @@ if __name__ == '__main__':
             train_loader = DataLoader(DSet(f_tr), batch_size=128, shuffle=True, **kwargs)
             val_loader = DataLoader(DSet(f_val), batch_size=128, **kwargs)
 
-        train(build_resnet50(), 300, save_paths[round_id])
+        train(build_resnet50(), train_loader, val_loader, 300, save_paths[round_id])
         round_id += 1
 
     with timer('load test data'):
