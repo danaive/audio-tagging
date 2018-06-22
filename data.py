@@ -39,6 +39,7 @@ class DSet(Dataset):
             data = self.data[ix][:, offset:offset+N_STEP]
         else:
             data = np.pad(self.data[ix], ((0, 0), (offset, N_STEP - self.data[ix].shape[1] - offset)), 'constant')
+        data = data.reshape(1, N_MFCC, N_STEP)
         if self.mode == 'train':
             return data, self.target[ix]
         else:

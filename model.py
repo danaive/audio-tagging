@@ -1,5 +1,3 @@
-import glob
-
 import numpy as np
 import pandas as pd
 import torch
@@ -7,7 +5,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from sklearn.model_selection import train_test_split
+from torchvision import models
+from sklearn.model_selection import train_test_split, KFold
 
 from utility import *
 from data import *
@@ -36,7 +35,6 @@ class CNN(nn.Module):
         self.fc2 = nn.Linear(64, len(CLASSES))
 
     def forward(self, x):
-        x = x.view(x.size(0), 1, x.size(1), x.size(2))
         x = F.relu(F.max_pool2d(self.bn1(self.conv1(x)), 2))
         x = F.relu(F.max_pool2d(self.bn2(self.conv2(x)), 2))
         x = F.relu(F.max_pool2d(self.bn3(self.conv3(x)), 2))
@@ -60,7 +58,7 @@ def mapk(output, target, k):
 def train(model, n_epoch=20, save_path=None):
 
     model.to(device)
-    criterion = nn.NLLLoss()
+    criterion = nn.CrossEntropyLoss()
     optimizer = optim.RMSprop(model.parameters())
     best_score = 0.0
 
@@ -113,10 +111,10 @@ def train(model, n_epoch=20, save_path=None):
     print(f'best validation map@3 {checkpoint["map3"]} at epoch {checkpoint["epoch"]}')
 
 
-def predict(checkpoints, sub):
+def predict(model, checkpoints, sub):
 
     def predict_once(cp):
-        model = CNN(N_STEP)
+        model.to(device)
         checkpoint = torch.load(f'checkpoints/{cp}.pth')
         print(f'using model: map@3 {checkpoint["map3"]:.4f} at epoch {checkpoint["epoch"]}')
         model.load_state_dict(checkpoint['state'])
@@ -124,6 +122,7 @@ def predict(checkpoints, sub):
         pred = []
         with torch.no_grad():
             for data in test_loader:
+                data = data.to(device)
                 output = model(data)
                 pred.append(output)
         return torch.cat(pred, dim=0)
@@ -138,18 +137,35 @@ def predict(checkpoints, sub):
     sub.to_csv('submission/last_prediction.csv', index=False)
 
 
+
+def build_resnet50():
+
+    model = models.resnet50()
+    model.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+    model.avgpool = nn.AvgPool2d((2, 5), stride=1)
+    model.fc = nn.Linear(2048, len(CLASSES))
+    return model
+    
+
 if __name__ == '__main__':
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
     train_samples = pd.read_csv('train.csv')['fname'].values
-    f_tr, f_val = train_test_split(train_samples, test_size=0.1)
-    with timer('load data'):
-        train_loader = DataLoader(DSet(f_tr), batch_size=128, shuffle=True, **kwargs)
-        val_loader = DataLoader(DSet(f_val), batch_size=128, **kwargs)
+    # f_tr, f_val = train_test_split(train_samples, test_size=0.1)
 
-    train(CNN(N_STEP), 200, 'firstattempt')
+    save_paths = [f'resnet50_r{i:2d}' for i in range(10)]
+    round_id = 0
+    for ix_tr, ix_val in KFold(n_splits=10).split(train_samples):
+        f_tr, f_val = train_samples[ix_tr], train_samples[ix_val]
+        with timer('load data'):
+            train_loader = DataLoader(DSet(f_tr), batch_size=128, shuffle=True, **kwargs)
+            val_loader = DataLoader(DSet(f_val), batch_size=128, **kwargs)
+
+        train(build_resnet50(), 300, save_paths[round_id])
+        round_id += 1
+
     with timer('load test data'):
         sub = pd.read_csv('sample_submission.csv')
         test_loader = DataLoader(DSet(sub['fname'].values, 'test'), batch_size=128, **kwargs)
-    predict(['firstattempt'], sub)
+    predict(build_resnet50(), save_paths, sub)
     
