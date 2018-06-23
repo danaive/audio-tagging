@@ -132,7 +132,7 @@ def predict(model, test_loader, checkpoints, sub=None):
             for data in test_loader:
                 data = data.to(device)
                 output = model(data)
-                pred.append(output)
+                pred.append(output.cpu().detach())
         return torch.cat(pred, dim=0)
 
     result = [predict_once(cp) for cp in checkpoints]
