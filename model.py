@@ -13,6 +13,7 @@ from data import *
 assert torch.__version__ >= '0.4.0'
 use_cuda = torch.cuda.is_available()
 device = torch.device('cuda' if use_cuda else 'cpu')
+kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
 
 
 class CNN(nn.Module):
@@ -118,7 +119,7 @@ def train(model, train_loader, val_loader, n_epoch=20, save_path=None):
     print(f'best validation map@3 {checkpoint["map3"]} at epoch {checkpoint["epoch"]}')
 
 
-def predict(model, checkpoints, sub):
+def predict(model, test_loader, checkpoints, sub=None):
 
     def predict_once(cp):
         model.to(device)
@@ -140,13 +141,15 @@ def predict(model, checkpoints, sub):
     labels = []
     for pred in result:
         labels.append(' '.join(map(lambda x: CLASSES[x], pred[:3])))
-    sub['label'] = labels
-    sub.to_csv('submission/last_prediction.csv', index=False)
+    if sub is not None:
+        sub['label'] = labels
+        sub.to_csv('submission/last_prediction.csv', index=False)
+    else:
+        return labels
     
 
 if __name__ == '__main__':
 
-    kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
     train_samples = pd.read_csv('train.csv')['fname'].values
     # f_tr, f_val = train_test_split(train_samples, test_size=0.1)
 
@@ -170,5 +173,5 @@ if __name__ == '__main__':
     with timer('load test data'):
         sub = pd.read_csv('sample_submission.csv')
         test_loader = DataLoader(DSet(sub['fname'].values, 'test'), batch_size=128, **kwargs)
-    predict(build_resnet50(), save_paths, sub)
+    predict(build_resnet50(), test_loader, save_paths, sub)
     

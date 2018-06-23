@@ -14,8 +14,9 @@ bad_wav = ['b39975f5.wav', '6ea0099f.wav', '0b0427e2.wav']
 
 class DSet(Dataset):
 
-    def __init__(self, samples, mode='train'):
+    def __init__(self, samples, mode='train', labels=True):
         self.mode = mode
+        self.labels = labels
         self.data = {}
         self.target = np.zeros(len(samples), dtype=np.int)
         if mode == 'train':
@@ -40,7 +41,7 @@ class DSet(Dataset):
         else:
             data = np.pad(self.data[ix], ((0, 0), (offset, N_STEP - self.data[ix].shape[1] - offset)), 'constant')
         data = data.reshape(1, N_MFCC, N_STEP)
-        if self.mode == 'train':
+        if self.mode == 'train' and self.labels == True:
             return data, self.target[ix]
         else:
             return data
