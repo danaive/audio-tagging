@@ -52,6 +52,11 @@ def make_collision():
 
 def train_on_collision():
 
+    """
+    mix verified data with collision data
+    10-fold
+    """ 
+
     df = pd.read_csv('collision.csv')
     train_samples = df[df.manually_verified > 0]['fname'].values
 
@@ -72,9 +77,38 @@ def train_on_collision():
     return save_paths
 
 
+def train_on_collision2():
+
+    """mix verified data with collision data
+    validation only on verified data
+    5-fold
+    """
+
+    df = pd.read_csv('collision.csv')
+    verified_samples = df[df.manually_verified == 1]['fname'].values
+    collision_samples = df[df.manually_verified == 2]['fname'].values
+
+    with ignore(OSError):
+        os.mkdir('checkpoints/collision2')
+    save_paths = [f'collision2/resnet50_r{i:02d}' for i in range(5)]
+    round_id = 0
+
+    for ix_tr, ix_val in KFold(n_splits=5).split(verified_samples):
+        f_tr, f_val = verified_samples[ix_tr], verified_samples[ix_val]
+        f_tr = np.hstack((f_tr, collision_samples))
+        with timer('load data'):
+            train_loader = DataLoader(DSet(f_tr), batch_size=128, shuffle=True, **kwargs)
+            val_loader = DataLoader(DSet(f_val), batch_size=128, **kwargs)
+        
+        train(build_resnet50(), train_loader, val_loader, 300, save_paths[round_id])
+        round_id += 1
+
+    return save_paths
+
+
 if __name__ == '__main__':
 
-    save_paths = train_on_collision()
+    save_paths = train_on_collision2()
     with timer('load test data'):
         sub = pd.read_csv('sample_submission.csv')
         test_loader = DataLoader(DSet(sub['fname'].values, 'test'), batch_size=128, **kwargs)
